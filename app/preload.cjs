@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("api", {
   start:             (type, preset, files, opts) => ipcRenderer.invoke("jobs:start", type, preset, files, opts),
   cancel:            ()                          => ipcRenderer.invoke("jobs:cancel"),
   reveal:            (target)                    => ipcRenderer.invoke("shell:reveal", target),
+  existing:          (paths)                     => ipcRenderer.invoke("fs:existing", paths),
   openFilesPrivacy:  ()                          => ipcRenderer.invoke("shell:openFilesPrivacy"),
   pathForFile:       (file)                      => webUtils.getPathForFile(file),
   onJobEvent:        (fn) => ipcRenderer.on("jobs:event", (_e, event) => fn(event)),

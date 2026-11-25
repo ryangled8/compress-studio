@@ -17,6 +17,8 @@ No FFmpeg or encoder knowledge required.
 
 The app bundles its own Node runtime, FFmpeg and sharp, so nothing else is needed on a fresh Mac. It includes a first-run welcome screen, a guided tour, and a Help panel (the **?** button) that can replay both.
 
+After each run the app shows a summary (before and after sizes, savings, time, and any problems) and saves it under **History**, stored locally on that Mac. If compressing would make a file bigger and the original could stand in unchanged (same format, same dimensions), the app copies the original into Outputs as `{name}-original.{ext}` instead. Conversions and resizes always keep the new file and are flagged as larger. Notifications are sent for completion, failures and blocked folders when the app is in the background. The `gc` CLI doesn't apply the keep-original rule.
+
 ### Building the app
 
 Needs Node.js 18+ on the machine doing the build (only yours, not your teammates').

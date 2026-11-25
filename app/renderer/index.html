@@ -37,6 +37,13 @@
         </button>
       </nav>
 
+      <nav class="nav nav-secondary" aria-label="Past runs">
+        <button class="nav-item" data-view="history" id="nav-history">
+          <span class="nav-icon" data-icon="clock"></span>
+          <span><b>History</b><small id="history-count">Your recent runs</small></span>
+        </button>
+      </nav>
+
       <div class="sidebar-foot">
         <button class="link-button" id="open-help-side"><span data-icon="help"></span> Help &amp; tips</button>
         <div class="powered">Runs on your Mac. Nothing is uploaded.</div>
@@ -52,6 +59,7 @@
           <p id="page-sub">Add files, pick a preset, press Start. Your originals are never changed.</p>
         </header>
 
+        <div id="steps-view">
         <div class="hint" id="tab-hint" hidden>
           <span class="hint-icon" data-icon="bulb"></span>
           <p id="tab-hint-text"></p>
@@ -114,17 +122,32 @@
             </div>
           </details>
         </section>
-      </div>
-
-      <!-- Results banner (after a run) -->
-      <div class="result" id="result" hidden>
-        <span class="result-icon" id="result-icon" data-icon="check"></span>
-        <div class="result-text">
-          <b id="result-title"></b>
-          <span id="result-sub"></span>
         </div>
-        <button class="button" id="result-again">Process more</button>
-        <button class="button primary" id="result-reveal"><span data-icon="folder"></span> Show in Finder</button>
+
+        <!-- Results of the run that just finished -->
+        <section id="results-view" hidden>
+          <div id="results-summary"></div>
+          <div class="results-actions">
+            <button class="button primary big" id="results-reveal"><span data-icon="folder"></span> Show in Finder</button>
+            <button class="button big" id="results-adjust" title="Keep these files and change the preset or settings">Change settings &amp; run again</button>
+            <button class="button big ghost" id="results-new" title="Clear the files and start a new batch">Process more files</button>
+          </div>
+          <p class="results-foot muted">This run is saved in <button class="inline-link" id="results-history">History</button>.</p>
+        </section>
+
+        <!-- Past runs -->
+        <section id="history-view" hidden>
+          <div class="history-toolbar">
+            <span class="muted" id="history-meta"></span>
+            <button class="inline-link" id="history-clear">Clear history</button>
+          </div>
+          <div class="history-empty" id="history-empty" hidden>
+            <span data-icon="clock"></span>
+            <p>No runs yet.</p>
+            <small>Each time you press Start, a summary is saved here.</small>
+          </div>
+          <ol class="history-list" id="history-list"></ol>
+        </section>
       </div>
 
       <!-- Footer action bar -->
@@ -200,6 +223,24 @@
       <details>
         <summary>Where do my new files go?</summary>
         <p>Into a new folder called <b>Outputs …</b> right next to your originals, e.g. <code>Outputs img-webp</code>. Your originals are never changed. Running the same preset again replaces the files in that folder.</p>
+      </details>
+
+      <details>
+        <summary>Why does a file say “kept original”?</summary>
+        <p>Some files are already as small as they can get, for example a JPEG that was heavily compressed before. Compressing it again would make it <b>bigger</b>.</p>
+        <p>When that happens, the app copies your original into the Outputs folder unchanged, with <b>-original</b> added to the name (e.g. <code>beach-original.jpg</code>), so nothing ever gets bigger. The summary after each run lists these files.</p>
+        <p>Presets that convert or resize (WebP, Social, Half size…) always keep the new file, because the original isn't in the format or size you asked for. If one of those comes out bigger, it's marked <b>larger</b>.</p>
+      </details>
+
+      <details>
+        <summary>Where can I see past runs?</summary>
+        <p>Click <b>History</b> in the sidebar. Every run is saved there with its before and after sizes, any kept originals or failures, and a button to open its Outputs folder. History is kept on this Mac only.</p>
+      </details>
+
+      <details>
+        <summary>Notifications</summary>
+        <p>If you switch to another app while a batch runs, Compress Studio notifies you when it finishes, if a file fails, or if macOS blocks a folder. The first time, macOS asks whether to allow notifications. Click <b>Allow</b>.</p>
+        <p>To change this later: <b>System Settings → Notifications → Compress Studio</b>.</p>
       </details>
 
       <details>
@@ -286,6 +327,7 @@
 
   <script src="icons.js"></script>
   <script src="presetInfo.js"></script>
+  <script src="history.js"></script>
   <script src="onboarding.js"></script>
   <script src="app.js"></script>
 </body>

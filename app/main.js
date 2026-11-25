@@ -117,8 +117,36 @@ ipcMain.handle("shell:reveal", (_e, target) => {
   else shell.showItemInFolder(target);
 });
 
+ipcMain.handle("fs:existing", (_e, paths) => paths.filter((p) => fs.existsSync(p)));
+
 ipcMain.handle("shell:openFilesPrivacy", () =>
   shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"));
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+// Shown when the window isn't in front, so long batches can run in the background.
+// Clicking one brings the app forward. References are kept so macOS can deliver
+// the click after the notification would otherwise have been garbage-collected.
+
+const liveNotifications = new Set();
+
+function notify(title, body) {
+  if (!win || win.isFocused() || !Notification.isSupported()) return;
+  const n = new Notification({ title, body });
+  liveNotifications.add(n);
+  n.on("click", () => { win?.show(); win?.focus(); });
+  n.on("close", () => liveNotifications.delete(n));
+  n.show();
+  app.dock?.bounce("informational");
+}
+
+const NOUNS = { img: ["image", "images"], vid: ["video", "videos"], gif: ["GIF", "GIFs"] };
+const count = (n, type) => `${n} ${NOUNS[type][n === 1 ? 0 : 1]}`;
+
+function formatBytes(n) {
+  if (n < 1024 ** 2) return `${Math.round(n / 1024)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
 
 // ─── Job queue ────────────────────────────────────────────────────────────────
 
@@ -151,7 +179,11 @@ ipcMain.handle("jobs:start", async (_e, type, presetName, files, options) => {
   const { settings, jobs } = plan;
   running = { cancelled: false, child: null };
   const blocker = powerSaveBlocker.start("prevent-app-suspension");
-  const results = { passed: 0, failed: 0, inBytes: 0, outBytes: 0 };
+  const startedAt = Date.now();
+  // outcome counts: smaller (compressed), kept (original kept), larger (converted/resized but bigger), gif
+  const results = { smaller: 0, kept: 0, larger: 0, gif: 0, failed: 0, inBytes: 0, outBytes: 0, durationMs: 0 };
+  let warnedError = false;
+  let warnedPermission = false;
 
   // Start on the next tick so the renderer gets this reply before the first event.
   setImmediate(async () => {
@@ -162,24 +194,35 @@ ipcMain.handle("jobs:start", async (_e, type, presetName, files, options) => {
       win?.setProgressBar(i / jobs.length);
 
       try {
-        const size = await runJob(type, job, settings, {
+        const r = await runJob(type, job, settings, {
+          keepOriginalIfLarger: true,
           onSpawn: (child) => (running.child = child),
           onProgress: (p) => {
             send({ kind: "progress", index: i, progress: p });
             win?.setProgressBar((i + p) / jobs.length);
           },
         });
-        results.passed++;
+        results[r.outcome]++;
         results.inBytes  += job.size;
-        results.outBytes += size;
-        send({ kind: "done", index: i, outSize: size, output: job.output });
+        results.outBytes += r.size;
+        send({ kind: "done", index: i, outSize: r.size, output: r.output, outcome: r.outcome, attemptedSize: r.attemptedSize });
       } catch (err) {
         if (running.cancelled) {
           fs.rmSync(job.output, { force: true }); // drop the half-written file
           break;
         }
         results.failed++;
-        send({ kind: "error", index: i, error: friendlyError(err, job.abs) });
+        const error = friendlyError(err, job.abs);
+        send({ kind: "error", index: i, error });
+
+        // One heads-up per batch, so a bad folder doesn't flood Notification Centre.
+        if (error.kind === "permission" && !warnedPermission) {
+          warnedPermission = true;
+          notify("Compress Studio needs folder access", `${error.message} Open the app to allow it.`);
+        } else if (error.kind !== "permission" && !warnedError) {
+          warnedError = true;
+          notify("A file couldn't be processed", `${path.basename(job.abs)} failed. The rest of the batch is carrying on.`);
+        }
       } finally {
         running.child = null;
       }
@@ -189,16 +232,21 @@ ipcMain.handle("jobs:start", async (_e, type, presetName, files, options) => {
     running = null;
     powerSaveBlocker.stop(blocker);
     win?.setProgressBar(-1);
+    results.durationMs = Date.now() - startedAt;
 
     const folders = [...new Set(jobs.map((j) => j.outFolder))].filter((f) => fs.existsSync(f));
     send({ kind: "finished", cancelled, results, folders });
 
-    if (!cancelled && win && !win.isFocused() && Notification.isSupported()) {
-      new Notification({
-        title: "All done",
-        body: `${results.passed} file${results.passed === 1 ? "" : "s"} saved${results.failed ? `, ${results.failed} failed` : ""}.`,
-      }).show();
-      app.dock?.bounce("informational");
+    if (!cancelled) {
+      const saved = results.smaller + results.kept + results.larger + results.gif;
+      const pct = results.inBytes ? Math.round((1 - results.outBytes / results.inBytes) * 100) : 0;
+      const parts = [`${count(saved, type)} saved`];
+      if (type !== "gif" && pct > 0) parts.push(`${formatBytes(results.inBytes - results.outBytes)} smaller (${pct}%)`);
+      const extra = [
+        results.kept   ? `${results.kept} kept as original${results.kept === 1 ? "" : "s"}` : "",
+        results.failed ? `${results.failed} failed` : "",
+      ].filter(Boolean).join(", ");
+      notify(results.failed ? "Finished, with problems" : "All done", `${parts.join(" · ")}.${extra ? ` ${extra}.` : ""}`);
     }
   });
 

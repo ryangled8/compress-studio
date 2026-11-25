@@ -8,6 +8,8 @@ const ICONS = {
   help:    '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>',
   x:       '<path d="M6 6l12 12M18 6 6 18"/>',
   plus:    '<path d="M12 5v14M5 12h14"/>',
+  keep:    '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  up:      '<path d="M12 19V5M6 11l6-6 6 6"/>',
   check:   '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   play:    '<path d="M8 5.5v13l10.5-6.5z"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',

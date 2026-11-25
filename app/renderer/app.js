@@ -18,6 +18,7 @@ const state = {
   files: [],
   rows: [],        // per-file status during/after a run
   running: false,
+  view: "steps",   // "steps" | "results" | "history"
   total: 0,
   current: 0,
 };
@@ -81,19 +82,53 @@ function selectType(type) {
   store.set("type", type);
   const copy = TYPE_COPY[type];
 
-  $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.type === type));
-  $("#page-title").textContent = copy.title;
-  $("#page-sub").textContent   = copy.sub;
   $("#dz-title").textContent   = copy.drop;
 
   const hintOff = store.get(`hint-off-${type}`, false);
   $("#tab-hint").hidden = hintOff;
   $("#tab-hint-text").textContent = copy.hint;
 
-  hideResult();
+  showView("steps");
   renderPresets();
   renderFields();
   refreshFiles();
+}
+
+// ─── Views: steps / results / history ─────────────────────────────────────────
+
+function showView(view) {
+  state.view = view;
+  $("#steps-view").hidden   = view !== "steps";
+  $("#results-view").hidden = view !== "results";
+  $("#history-view").hidden = view !== "history";
+  $(".actionbar").hidden    = view !== "steps";
+
+  $$(".nav-item").forEach((b) => b.classList.toggle("active",
+    view === "history" ? b.dataset.view === "history" : b.dataset.type === state.type));
+
+  const copy = TYPE_COPY[state.type];
+  if (view === "history") {
+    $("#page-title").textContent = "History";
+    $("#page-sub").textContent   = "Your recent runs, newest first. Click one to see the full summary.";
+    renderHistory();
+  } else {
+    $("#page-title").textContent = copy.title;
+    $("#page-sub").textContent   = copy.sub;
+  }
+  $(".main-scroll").scrollTop = 0;
+}
+
+function renderHistory() {
+  const runs = History.renderList($("#history-list"));
+  $("#history-empty").hidden = runs.length > 0;
+  $("#history-clear").hidden = runs.length === 0;
+  $("#history-meta").textContent = runs.length ? `${plural(runs.length, ["run", "runs"])} saved on this Mac` : "";
+  updateHistoryCount();
+}
+
+function updateHistoryCount() {
+  const n = History.all().length;
+  $("#history-count").textContent = n ? plural(n, ["recent run", "recent runs"]) : "Your recent runs";
 }
 
 // ─── Step 1: files ────────────────────────────────────────────────────────────
@@ -102,7 +137,7 @@ async function addSources(paths, { replace = false } = {}) {
   if (!paths.length) return;
   const current = replace ? [] : state.sources[state.type];
   state.sources[state.type] = [...new Set([...current, ...paths])];
-  hideResult();
+  showView("steps");
   await refreshFiles({ announceSkipped: true });
 }
 
@@ -202,9 +237,20 @@ function updateRow(i) {
     status.textContent = row.progress != null ? ` · ${Math.round(row.progress * 100)}%` : " · working…";
     bar.style.width = `${Math.round((row.progress ?? 0) * 100)}%`;
     icon.innerHTML = iconSvg("spinner");
-  } else if (row.status === "done") {
+  } else if (row.status === "smaller" || row.status === "larger") {
     const pct = Math.round((1 - row.outSize / f.size) * 100);
-    status.innerHTML = ` → ${formatBytes(row.outSize)} <b class="${pct >= 0 ? "good" : "bad"}">${pct >= 0 ? `${pct}% smaller` : `${-pct}% larger`}</b>`;
+    status.innerHTML = ` → ${formatBytes(row.outSize)} <b class="${pct > 0 ? "good" : "bad"}">${pct > 0 ? `${pct}% smaller` : `${-pct}% larger`}</b>`;
+    icon.innerHTML = iconSvg(row.status === "smaller" ? "check" : "up");
+    li.title = row.status === "larger"
+      ? `${row.output}\nConverting or resizing made this bigger than the original. It's still saved.`
+      : row.output;
+  } else if (row.status === "kept") {
+    const grew = Math.round((row.attemptedSize / f.size - 1) * 100);
+    status.innerHTML = ` · <b class="kept">kept original</b>`;
+    icon.innerHTML = iconSvg("keep");
+    li.title = `Compressing would have made this ${grew}% bigger, so the original was copied in unchanged:\n${row.output}`;
+  } else if (row.status === "gif") {
+    status.innerHTML = ` → <b>${formatBytes(row.outSize)}</b> GIF`;
     icon.innerHTML = iconSvg("check");
     li.title = row.output;
   } else if (row.status === "error") {
@@ -254,7 +300,6 @@ function selectPreset(key) {
   store.set("preset", state.preset);
   markSelectedPreset();
   renderFields();
-  hideResult();
   updateActionBar();
 }
 
@@ -434,7 +479,6 @@ async function start() {
   }
 
   document.body.classList.add("is-running");
-  hideResult();
   $("#progress").hidden   = false;
   $("#cancel-btn").hidden = false;
   $("#action-meta").hidden = true;
@@ -461,7 +505,7 @@ function onJobEvent(ev) {
     state.rows[ev.index].progress = ev.progress;
     updateRow(ev.index);
   } else if (ev.kind === "done") {
-    state.rows[ev.index] = { status: "done", outSize: ev.outSize, output: ev.output };
+    state.rows[ev.index] = { status: ev.outcome, outSize: ev.outSize, output: ev.output, attemptedSize: ev.attemptedSize };
     updateRow(ev.index);
   } else if (ev.kind === "error") {
     state.rows[ev.index] = { status: "error", error: ev.error };
@@ -483,38 +527,28 @@ function finish({ cancelled, results, folders }) {
   state.rows.forEach((r, i) => { if (r.status === "queued") { r.status = "ready"; updateRow(i); } });
   updateActionBar();
 
-  const noun  = TYPE_COPY[state.type].outNoun ?? TYPE_COPY[state.type].noun;
-  const saved = results.inBytes - results.outBytes;
-  const pct   = results.inBytes ? Math.round((saved / results.inBytes) * 100) : 0;
+  const key = state.preset[state.type];
+  const custom = $("#adjust-summary").textContent;
+  const run = History.build({
+    type: state.type,
+    presetKey: key,
+    presetTitle: presetCopy(state.type, key, currentPreset()).title,
+    adjustments: custom.startsWith("Custom") ? custom : "",
+    sources: state.sources[state.type],
+    files: state.files,
+    rows: state.rows,
+    results,
+    folders,
+    cancelled,
+  });
+  History.add(run);
+  updateHistoryCount();
 
-  let title;
-  if (cancelled) title = results.passed ? `Stopped. ${plural(results.passed, noun)} finished before you cancelled.` : "Stopped. Nothing was saved.";
-  else if (results.failed) title = `${plural(results.passed, noun)} saved, ${results.failed} couldn't be processed`;
-  else title = `All done! ${plural(results.passed, noun)} saved`;
-
-  const sub = results.passed
-    ? `${formatBytes(results.inBytes)} → ${formatBytes(results.outBytes)} ${pct >= 0 ? `(${pct}% smaller)` : `(${-pct}% larger)`}`
-    : "Nothing was saved.";
-
-  showResult({ title, sub, folders, kind: results.failed || cancelled ? "warn" : "check" });
-  if (results.failed && !cancelled) {
-    toast("Hover over a failed file in the list to see why. Other files were saved as normal.", { kind: "error" });
-  }
-}
-
-function showResult({ title, sub, folders, kind }) {
-  $("#result").hidden = false;
-  $("#result").className = `result ${kind}`;
-  $("#result-icon").dataset.icon = kind;
-  hydrateIcons($("#result"));
-  $("#result-title").textContent = title;
-  $("#result-sub").textContent   = sub + (folders.length ? ` · ${folders.length > 1 ? `${folders.length} Outputs folders` : baseName(folders[0])}` : "");
-  $("#result-reveal").hidden = folders.length === 0;
-  $("#result-reveal").onclick = () => folders.forEach((f) => window.api.reveal(f));
-}
-
-function hideResult() {
-  $("#result").hidden = true;
+  $("#results-summary").innerHTML = History.renderRun(run);
+  History.hydrate($("#results-summary"));
+  $("#results-reveal").hidden = folders.length === 0;
+  $("#results-reveal").onclick = () => folders.forEach((f) => window.api.reveal(f));
+  showView("results");
 }
 
 // ─── Drag & drop ──────────────────────────────────────────────────────────────
@@ -571,7 +605,7 @@ async function init() {
     refreshFiles({ announceSkipped: true });
   };
 
-  $$(".nav-item").forEach((b) => (b.onclick = () => selectType(b.dataset.type)));
+  $$(".nav-item[data-type]").forEach((b) => (b.onclick = () => selectType(b.dataset.type)));
 
   const choose = async (replace) => addSources(await window.api.choose(state.type), { replace });
   $("#choose-btn").onclick = (e) => { e.stopPropagation(); choose(false); };
@@ -579,13 +613,37 @@ async function init() {
   $("#change-btn").onclick = () => choose(true);
   $("#dropzone").onclick = (e) => { if (!state.sources[state.type].length && e.target === e.currentTarget) choose(false); };
   $("#dropzone").onkeydown = (e) => { if ((e.key === "Enter" || e.key === " ") && !state.sources[state.type].length) choose(false); };
-  $("#clear-btn").onclick = () => { state.sources[state.type] = []; hideResult(); refreshFiles(); };
+  $("#clear-btn").onclick = () => { state.sources[state.type] = []; refreshFiles(); };
 
   $("#reset-adjust").onclick = () => { state.adjust[state.type] = {}; renderFields(); updateActionBar(); };
 
   $("#start-btn").onclick  = start;
   $("#cancel-btn").onclick = () => window.api.cancel();
-  $("#result-again").onclick = () => { hideResult(); state.sources[state.type] = []; refreshFiles(); };
+  $("#results-adjust").onclick  = () => showView("steps");
+  $("#results-new").onclick     = () => { state.sources[state.type] = []; refreshFiles(); showView("steps"); };
+  $("#results-history").onclick = () => showView("history");
+
+  $("#nav-history").onclick = () => { if (!state.running) showView("history"); };
+  $("#history-clear").onclick = () => {
+    if (!confirm("Clear all history? Your files and Outputs folders aren't affected.")) return;
+    History.clear();
+    renderHistory();
+  };
+  $("#history-list").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const id  = Number(btn.closest(".history-item").dataset.id);
+    const run = History.all().find((r) => r.id === id);
+    if (!run) return;
+    if (btn.dataset.action === "remove") {
+      History.remove(id);
+      renderHistory();
+    } else if (btn.dataset.action === "reveal") {
+      const existing = await window.api.existing(run.folders);
+      if (!existing.length) return toast("That Outputs folder has been moved or deleted.", { kind: "error" });
+      existing.forEach((f) => window.api.reveal(f));
+    }
+  });
 
   $("#tab-hint-close").onclick = () => { store.set(`hint-off-${state.type}`, true); $("#tab-hint").hidden = true; };
 
@@ -606,6 +664,7 @@ async function init() {
   window.api.onJobEvent(onJobEvent);
   setupDragAndDrop();
   selectType(state.type);
+  updateHistoryCount();
   Onboarding.init();
 }
 

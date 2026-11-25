@@ -41,6 +41,16 @@ Click **Allow**. The app needs this to read your files and save the smaller copi
 
 **Clicked “Don't Allow” by mistake?** Open  → **System Settings** → **Privacy & Security** → **Files & Folders** → **Compress Studio**, and switch on the folders you need. The app's Help panel (the **?** button) has a shortcut straight to that page.
 
+## 4. Allow notifications
+
+The first time a batch finishes while you're in another app, macOS asks:
+
+> *“Compress Studio” would like to send you notifications.*
+
+Click **Allow**. The app then lets you know when a batch is done, if a file couldn't be processed, or if it needs access to a folder, so you can get on with other things while big batches run.
+
+**Clicked “Don't Allow”?** Open  → **System Settings** → **Notifications** → **Compress Studio** and switch on **Allow notifications**.
+
 ## Using it
 
 When the app first opens, it shows a short welcome and offers a tour. In short:
@@ -49,7 +59,11 @@ When the app first opens, it shows a short welcome and offers a tour. In short:
 2. Drag in files or a folder, or click **Browse…** to pick them in Finder.
 3. Pick a preset (choose **Recommended** if you're not sure) and press **Start**.
 
-Your new files go into a folder called **Outputs …** next to your originals, for example `Outputs img-webp`. Click **Show in Finder** when it's done.
+Your new files go into a folder called **Outputs …** next to your originals, for example `Outputs img-webp`. When it's done you'll see a summary (before and after sizes, how much you saved and how long it took) with a **Show in Finder** button.
+
+**Files marked “-original”:** a few files, like JPEGs that were already heavily compressed, would get *bigger* if compressed again. For those, the app copies your original into the Outputs folder unchanged and adds **-original** to the name (for example `beach-original.jpg`), so nothing ever gets bigger. The summary lists them.
+
+**History:** every run is saved under **History** in the sidebar, so you can look back at what you did and reopen its Outputs folder.
 
 You can replay the tour any time from the **?** button in the bottom-right corner.
 
@@ -73,6 +87,8 @@ Drag **Compress Studio** from Applications to the Bin.
 | The app says it can't open a folder | See **3. Allow access to your folders** above. |
 | A file shows **couldn't process** | Hover over it to see why. Usually the file is damaged, still downloading, or a format the app can't read. Other files carry on as normal. |
 | Videos are slow | Large or 4K videos can take several minutes each. Leave the app open. Your Mac won't sleep while it's working, and you'll get a notification when it's done. |
+| No notifications | Open  → **System Settings** → **Notifications** → **Compress Studio** and switch on **Allow notifications**. They only appear while you're in another app. |
+| Some files are called “…-original” | Compressing them would have made them bigger, so your original was kept instead. See **Using it** above. |
 
 <details>
 <summary>For whoever is helping: removing the download flag by hand</summary>
