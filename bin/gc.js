@@ -6,12 +6,17 @@ import { Command } from "commander";
 import gifPresets from "../presets/gifPresets.js";
 import videoPresets from "../presets/videoPresets.js";
 import imgPresets from "../presets/imgPresets.js";
-import { resolveWidth } from "../lib/resolveWidth.js";
+import { resolveGifSettings, resolveVideoSettings, resolveImgSettings } from "../lib/settings.js";
 import { buildFilters } from "../lib/buildFilters.js";
 import { buildVideoArgs } from "../lib/buildVideoCommand.js";
 import { compressImage } from "../lib/runSharp.js";
-import { runFFmpegAsync, runFFmpegRawAsync, checkFFmpeg, checkCodec, printFFmpegInstallHelp } from "../lib/runFFmpeg.js";
+import { runFFmpegAsync, runFFmpegRawAsync, checkFFmpeg, checkCodec, printFFmpegInstallHelp, setFFmpegPath } from "../lib/runFFmpeg.js";
 import { findVideoFiles, findImageFiles } from "../lib/selectFiles.js";
+import ffmpegStatic from "ffmpeg-static";
+
+// Use the system FFmpeg when there is one; otherwise fall back to the copy
+// bundled with the ffmpeg-static dependency, so no separate install is needed.
+if (!checkFFmpeg() && ffmpegStatic) setFFmpegPath(ffmpegStatic);
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
@@ -333,48 +338,6 @@ function listPresets() {
   }
 }
 
-// ─── GIF: resolve settings ────────────────────────────────────────────────────
-
-function resolveGifSettings(presetName, options) {
-  const preset = { ...gifPresets[presetName] };
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  return {
-    fps:    options.fps    ? parseInt(options.fps, 10)    : preset.fps,
-    colors: options.colors ? parseInt(options.colors, 10) : preset.colors,
-    dither: options.dither ?? preset.dither,
-    width:  hasWidthOverride ? resolveWidth(options.width, preset.width ?? 1920) : preset.width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-  };
-}
-
-// ─── Video: resolve settings ──────────────────────────────────────────────────
-
-function resolveVideoSettings(presetName, options) {
-  const preset = { ...videoPresets[presetName] };
-
-  // Explicit width override disables keepOriginalDimensions
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  const width = hasWidthOverride
-    ? resolveWidth(options.width, preset.width ?? 1920)
-    : preset.width;
-
-  return {
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-    width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    codec:         options.codec  ?? preset.codec,
-    crf:           options.crf    ? parseInt(options.crf, 10) : preset.crf,
-    preset:        options.preset ?? preset.preset,
-    fps:           options.fps    ? parseInt(options.fps, 10) : null,
-    audioBitrate:  options.audio  ?? preset.audioBitrate,
-  };
-}
-
 // ─── GIF: compress single file ────────────────────────────────────────────────
 
 async function compressGif(input, presetName, options) {
@@ -653,29 +616,6 @@ async function batchVideo(presetName, options) {
   } else {
     console.log(`  ${green(`${passed} saved`)}  ${red(`${failed} failed`)}  ${dim("→")} ${bold(`Outputs vid-${presetName}/`)}\n`);
   }
-}
-
-// ─── Image: resolve settings ──────────────────────────────────────────────────
-
-function resolveImgSettings(presetName, options) {
-  const preset = { ...imgPresets[presetName] };
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  const width = hasWidthOverride
-    ? resolveWidth(options.width, preset.width ?? 1920)
-    : preset.width;
-
-  let format = options.format ?? preset.format;
-  if (format === "jpg") format = "jpeg";
-
-  return {
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-    width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    format,
-    quality: options.quality ? parseInt(options.quality, 10) : preset.quality,
-  };
 }
 
 // ─── Image: compress single file ─────────────────────────────────────────────
