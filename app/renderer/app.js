@@ -13,6 +13,7 @@ const state = {
   presets: null,
   preset: store.get("preset", { ...RECOMMENDED }),
   sources: { img: [], vid: [], gif: [] },
+  excluded: { img: new Set(), vid: new Set(), gif: new Set() }, // files removed from the list
   adjust: { img: {}, vid: {}, gif: {} },
   subfolders: store.get("subfolders", false),
   files: [],
@@ -60,6 +61,7 @@ function toast(message, { kind = "info", action, timeout = 6000 } = {}) {
   if (action) el.querySelector(".inline-link").onclick = () => { action.fn(); close(); };
   $("#toasts").append(el);
   if (timeout) setTimeout(close, timeout);
+  return close;
 }
 
 function showError(error) {
@@ -136,6 +138,8 @@ function updateHistoryCount() {
 async function addSources(paths, { replace = false } = {}) {
   if (!paths.length) return;
   const current = replace ? [] : state.sources[state.type];
+  if (replace) state.excluded[state.type].clear();
+  paths.forEach((p) => state.excluded[state.type].delete(p));
   state.sources[state.type] = [...new Set([...current, ...paths])];
   showView("steps");
   await refreshFiles({ announceSkipped: true });
@@ -151,7 +155,7 @@ async function refreshFiles({ announceSkipped = false } = {}) {
       showError(res.error);
       state.files = [];
     } else {
-      state.files = res.files;
+      state.files = res.files.filter((f) => !state.excluded[state.type].has(f.abs));
       if (announceSkipped && res.skipped) {
         const [one, many] = TYPE_COPY[state.type].noun;
         toast(res.skipped === 1
@@ -183,7 +187,14 @@ function renderSource() {
     path: p,
     kind: state.files.some((f) => f.abs === p) ? "file" : "folder",
   })), 3) || `${sources.length} items`;
-  $("#source-meta").textContent = `${plural(state.files.length, noun)} found · ${formatBytes(total)}`;
+  const removed = state.excluded[state.type].size;
+  $("#source-meta").innerHTML = `${plural(state.files.length, noun)} · ${formatBytes(total)}`
+    + (removed ? ` · ${removed} removed <button class="inline-link" id="restore-removed">Restore</button>` : "");
+  $("#restore-removed")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    state.excluded[state.type].clear();
+    refreshFiles();
+  });
   $("#source-name").title = sources.join("\n");
 }
 
@@ -222,11 +233,67 @@ function renderFiles() {
         <span class="file-sub"><span class="file-size">${formatBytes(f.size)}</span><span class="file-status"></span></span>
         <span class="file-bar"><span></span></span>
       </span>
-      <span class="file-state"></span>`;
+      <span class="file-state"></span>
+      <button class="file-remove" title="Remove from list" aria-label="Remove ${escapeHtml(f.rel)} from the list">${iconSvg("x")}</button>`;
     frag.append(li);
   });
   list.append(frag);
   list.querySelectorAll(".thumb").forEach((t) => thumbObserver.observe(t));
+}
+
+// Takes a file out of the list (its original is untouched). Undo puts it back.
+let closeRemoveToast = null;
+
+function removeFile(i) {
+  if (state.running) return;
+  const type = state.type;
+  const file = state.files[i];
+  const row  = state.rows[i];
+  if (!file) return;
+
+  // A file added on its own is dropped from the sources; one found inside a
+  // folder is remembered as removed, so rescans (subfolders, Add more) skip it.
+  const wasSource = state.sources[type].includes(file.abs);
+  if (wasSource) state.sources[type] = state.sources[type].filter((p) => p !== file.abs);
+  else state.excluded[type].add(file.abs);
+
+  state.files.splice(i, 1);
+  state.rows.splice(i, 1);
+
+  if (!state.sources[type].length) {
+    refreshFiles(); // nothing left: back to the empty drop zone
+  } else {
+    const li = $(`#file-list .file[data-index="${i}"]`);
+    li?.remove();
+    $$("#file-list .file").forEach((el) => {
+      const n = Number(el.dataset.index);
+      if (n > i) el.dataset.index = n - 1;
+    });
+    $("#files-count").textContent = state.files.length ? plural(state.files.length, TYPE_COPY[type].noun) : "";
+    $("#files-empty").hidden = state.files.length > 0;
+    $("#files-tip").hidden   = state.files.length === 0;
+    renderSource();
+    updateActionBar();
+  }
+
+  closeRemoveToast?.();
+  closeRemoveToast = toast(`Removed ${file.rel} from the list. The file itself isn't touched.`, {
+    action: {
+      label: "Undo",
+      fn: () => {
+        if (state.running || state.type !== type) return;
+        if (wasSource) state.sources[type] = [...state.sources[type], file.abs];
+        else state.excluded[type].delete(file.abs);
+        const at = Math.min(i, state.files.length);
+        state.files.splice(at, 0, file);
+        state.rows.splice(at, 0, row);
+        renderSource();
+        renderFiles();
+        state.rows.forEach((_, n) => updateRow(n));
+        updateActionBar();
+      },
+    },
+  });
 }
 
 function updateRow(i) {
@@ -620,14 +687,14 @@ async function init() {
   $("#change-btn").onclick = () => choose(true);
   $("#dropzone").onclick = (e) => { if (!state.sources[state.type].length && e.target === e.currentTarget) choose(false); };
   $("#dropzone").onkeydown = (e) => { if ((e.key === "Enter" || e.key === " ") && !state.sources[state.type].length) choose(false); };
-  $("#clear-btn").onclick = () => { state.sources[state.type] = []; refreshFiles(); };
+  $("#clear-btn").onclick = () => { state.sources[state.type] = []; state.excluded[state.type].clear(); refreshFiles(); };
 
   $("#reset-adjust").onclick = () => { state.adjust[state.type] = {}; renderFields(); updateActionBar(); };
 
   $("#start-btn").onclick  = start;
   $("#cancel-btn").onclick = () => window.api.cancel();
   $("#results-adjust").onclick  = () => showView("steps");
-  $("#results-new").onclick     = () => { state.sources[state.type] = []; refreshFiles(); showView("steps"); };
+  $("#results-new").onclick     = () => { state.sources[state.type] = []; state.excluded[state.type].clear(); refreshFiles(); showView("steps"); };
   $("#results-history").onclick = () => showView("history");
 
   // "Show in Finder" links in summaries (results screen and History).
@@ -692,7 +759,12 @@ async function init() {
       li?.scrollIntoView({ block: "nearest" });
     },
   });
+  $("#file-list").addEventListener("click", (e) => {
+    const btn = e.target.closest(".file-remove");
+    if (btn) removeFile(Number(btn.closest(".file").dataset.index));
+  });
   $("#file-list").addEventListener("dblclick", (e) => {
+    if (e.target.closest(".file-remove")) return;
     const li = e.target.closest(".file");
     if (li) Lightbox.open(Number(li.dataset.index));
   });

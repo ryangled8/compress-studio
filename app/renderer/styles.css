@@ -544,3 +544,15 @@ body.is-running #start-btn { display: none; }
 
 .lb-foot { display: flex; justify-content: center; gap: 22px; padding: 10px 0 16px; font-size: 12px; color: rgba(255, 255, 255, .45); }
 body.previewing .help-fab { display: none; }
+
+/* Remove-from-list button: appears on hover in place of the status icon */
+.file-remove {
+  display: none; width: 26px; height: 26px; margin: -4px -4px -4px 0; flex: none; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+}
+.file-remove svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.file-remove:hover { background: var(--bad-bg); color: var(--bad); }
+body:not(.is-running) .file:hover .file-remove,
+body:not(.is-running) .file-remove:focus-visible { display: grid; }
+body:not(.is-running) .file:hover .file-state { display: none; }
+#source-meta .inline-link { font-size: 13px; }
