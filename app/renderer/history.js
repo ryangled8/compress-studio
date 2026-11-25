@@ -8,6 +8,7 @@ const History = (() => {
   const MAX_NAMES = 200; // per list, to keep storage small for huge batches
 
   const TYPE_LABEL = { img: "Images", vid: "Videos", gif: "GIFs" };
+  const MAX_SOURCES = 50;
   const TYPE_ICON  = { img: "image", vid: "video", gif: "gif" };
 
   function all() {
@@ -50,7 +51,8 @@ const History = (() => {
       preset: presetKey,
       presetTitle,
       adjustments,
-      source: sources.length === 1 ? baseName(sources[0]) : `${sources.length} items`,
+      source: sourceLabel(sources.map((p) => ({ path: p, kind: kindOf(p, files) }))),
+      sources: sources.slice(0, MAX_SOURCES).map((p) => ({ path: p, kind: kindOf(p, files) })),
       total: files.length,
       cancelled,
       results,
@@ -60,6 +62,68 @@ const History = (() => {
       larger: pick("larger", (r, f) => ({ rel: f.rel, pct: growth(r.outSize, f.size) })),
       failed: pick("error",  (r, f) => ({ rel: f.rel, message: r.error.message })),
     };
+  }
+
+  // ── What was added: folders and files ──────────────────────────────────────
+
+  // A source is a file if it was collected as one; otherwise it's a folder.
+  function kindOf(p, files) {
+    return files.some((f) => f.abs === p) ? "file" : "folder";
+  }
+
+  // "Holiday photos, Client logos +2 more". Loose files are grouped by the folder
+  // they came from: "3 files from Desktop".
+  function sourceLabel(sources, max = 2) {
+    const groups = [];
+    const looseByDir = new Map();
+    for (const src of sources) {
+      if (src.kind === "folder") groups.push(baseName(src.path));
+      else {
+        const dir = src.path.slice(0, src.path.lastIndexOf("/")) || "/";
+        looseByDir.set(dir, [...(looseByDir.get(dir) ?? []), src.path]);
+      }
+    }
+    for (const [dir, paths] of looseByDir) {
+      groups.push(paths.length === 1 ? baseName(paths[0]) : `${paths.length} files from ${baseName(dir)}`);
+    }
+    if (!groups.length) return "";
+    const shown = groups.slice(0, max).join(", ");
+    return groups.length > max ? `${shown} +${groups.length - max} more` : shown;
+  }
+
+  let home = "";
+  function setHome(dir) { home = dir; }
+
+  // Shows paths in the user's home folder as ~/Desktop/… .
+  function tidyPath(p) {
+    return home && p.startsWith(home + "/") ? `~${p.slice(home.length)}` : p;
+  }
+
+  // Folder a path lives in, shortened in the middle when long so the
+  // meaningful end stays visible: ~/Desktop/…/Client work/Photos
+  function parentOf(p) {
+    const dir = tidyPath(p.slice(0, p.lastIndexOf("/")) || "/");
+    if (dir.length <= 64) return dir;
+    const parts = dir.split("/");
+    return parts.length > 4 ? [...parts.slice(0, 2), "…", ...parts.slice(-2)].join("/") : dir;
+  }
+
+  // "Files from" and "Saved to" lists, each entry with a Show in Finder link.
+  function renderLocations(run) {
+    const from = run.sources ?? null;
+    const row = (icon, name, sub, path) => `
+      <li><span class="loc-icon" data-icon="${icon}"></span>
+        <span class="loc-text"><b title="${escapeHtml(path)}">${escapeHtml(name)}</b><small class="muted">${escapeHtml(sub)}</small></span>
+        <button class="inline-link" data-reveal="${escapeHtml(path)}">Show in Finder</button></li>`;
+    const fromList = from
+      ? from.map((src) => row(src.kind === "folder" ? "folder" : TYPE_ICON[run.type], baseName(src.path), parentOf(src.path), src.path)).join("")
+      : `<li><span class="loc-icon" data-icon="folder"></span><span class="loc-text"><b>${escapeHtml(run.source)}</b><small class="muted">Paths weren't recorded for this older run</small></span></li>`;
+    const toList = run.folders.map((f) => row("folder", baseName(f), parentOf(f), f)).join("");
+    return `
+      <div class="locations">
+        <div><h3>Files from</h3><ul>${fromList}</ul></div>
+        ${toList ? `<div><h3>Saved to</h3><ul>${toList}</ul></div>` : ""}
+      </div>`;
   }
 
   // ── Formatting ──────────────────────────────────────────────────────────────
@@ -127,7 +191,6 @@ const History = (() => {
       TYPE_LABEL[run.type],
       `${escapeHtml(run.presetTitle)} preset`,
       run.adjustments ? escapeHtml(run.adjustments) : "",
-      escapeHtml(run.source),
       when(run.at),
     ].filter(Boolean).join(" · ");
 
@@ -182,6 +245,7 @@ const History = (() => {
             <p class="muted">${meta}</p>
           </div>
         </header>
+        ${renderLocations(run)}
         <div class="stats">${stats.map(([label, value, sub, tone]) => `
           <div class="stat ${tone ?? ""}"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`).join("")}
         </div>
@@ -215,8 +279,8 @@ const History = (() => {
             <summary>
               <span class="nav-icon" data-icon="${TYPE_ICON[run.type]}"></span>
               <span class="hi-main">
-                <b>${escapeHtml(run.presetTitle)} · ${plural(n, nouns(run.type))}</b>
-                <small class="muted">${when(run.at)} · ${escapeHtml(run.source)}</small>
+                <b title="${escapeHtml((run.sources ?? []).map((x) => x.path).join("\n"))}">${escapeHtml(run.source || "Unknown source")}</b>
+                <small class="muted">${escapeHtml(run.presetTitle)} · ${plural(n, nouns(run.type))} · ${when(run.at)}</small>
               </span>
               <span class="hi-flags">${flags}</span>
               <span class="hi-size">
@@ -246,5 +310,5 @@ const History = (() => {
     hydrateIcons(container);
   }
 
-  return { all, add, remove, clear, build, renderRun, renderList, hydrate };
+  return { all, add, remove, clear, build, renderRun, renderList, hydrate, sourceLabel, setHome };
 })();

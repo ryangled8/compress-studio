@@ -72,6 +72,7 @@ function friendlyError(err, filePath) {
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   ffmpegReady: checkFFmpeg(),
+  home: app.getPath("home"),
 }));
 
 ipcMain.handle("presets:get", () => ({

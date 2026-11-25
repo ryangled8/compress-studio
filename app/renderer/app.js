@@ -179,7 +179,10 @@ function renderSource() {
 
   const total = state.files.reduce((s, f) => s + f.size, 0);
   const noun  = TYPE_COPY[state.type].noun;
-  $("#source-name").textContent = sources.length === 1 ? baseName(sources[0]) : `${sources.length} items`;
+  $("#source-name").textContent = History.sourceLabel(sources.map((p) => ({
+    path: p,
+    kind: state.files.some((f) => f.abs === p) ? "file" : "folder",
+  })), 3) || `${sources.length} items`;
   $("#source-meta").textContent = `${plural(state.files.length, noun)} found · ${formatBytes(total)}`;
   $("#source-name").title = sources.join("\n");
 }
@@ -594,6 +597,7 @@ async function init() {
   state.presets = await window.api.presets();
   const info = await window.api.info();
   $("#help-version").textContent = `Compress Studio ${info.version}`;
+  History.setHome(info.home);
   if (!info.ffmpegReady) {
     toast("Video tools didn't start properly. Try reinstalling the app; images will still work.", { kind: "error", timeout: 0 });
   }
@@ -622,6 +626,16 @@ async function init() {
   $("#results-adjust").onclick  = () => showView("steps");
   $("#results-new").onclick     = () => { state.sources[state.type] = []; refreshFiles(); showView("steps"); };
   $("#results-history").onclick = () => showView("history");
+
+  // "Show in Finder" links in summaries (results screen and History).
+  document.addEventListener("click", async (e) => {
+    const link = e.target.closest("[data-reveal]");
+    if (!link) return;
+    e.preventDefault();
+    const [found] = await window.api.existing([link.dataset.reveal]);
+    if (found) window.api.reveal(found);
+    else toast("That folder or file has been moved or deleted.", { kind: "error" });
+  });
 
   $("#nav-history").onclick = () => { if (!state.running) showView("history"); };
   $("#history-clear").onclick = () => {
