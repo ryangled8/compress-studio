@@ -1,4 +1,5 @@
-// Generates build/icon.icns and build/dmg-background.tiff from SVG.
+// Generates build/icon.icns, build/dmg-background.tiff and app/renderer/logo.png from SVG.
+// The dmg text is set in Geist, from build/fonts.
 // Run with `npm run icons` after changing the artwork; the outputs are committed.
 // Needs macOS (uses the built-in iconutil and tiffutil).
 
@@ -100,7 +101,14 @@ await sharp(Buffer.from(iconSvg))
 
 // ── DMG background (660×460, with @2x for Retina) ──────────────────────────
 // Icons are placed by package.json → build.dmg.contents at (180,200) and (480,200).
-const font = `-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif`;
+// Shapes come from SVG; text is set in Geist from build/fonts and laid on top,
+// because the SVG renderer can only use fonts installed on the machine.
+const fontDir = path.join(build, "fonts");
+const GEIST = {
+  regular:  { file: "Geist-Regular.ttf",  name: "Geist" },
+  semibold: { file: "Geist-SemiBold.ttf", name: "Geist SemiBold" },
+};
+
 const bgSvg = (scale) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="${660 * scale}" height="${460 * scale}" viewBox="0 0 660 460">
   <defs>
@@ -109,25 +117,51 @@ const bgSvg = (scale) => `
     </linearGradient>
   </defs>
   <rect width="660" height="460" fill="url(#bg)"/>
-  <text x="330" y="58" text-anchor="middle" font-family="${font}" font-size="21" font-weight="700" fill="#171b26">Install Compress Studio</text>
-  <text x="330" y="84" text-anchor="middle" font-family="${font}" font-size="13.5" fill="#4a5163">Drag the app onto the Applications folder</text>
   <g fill="none" stroke="#16161a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".7">
     <path d="M262 200h128"/><path d="m376 186 16 14-16 14"/>
   </g>
   <rect x="40" y="312" width="580" height="122" rx="14" fill="#ffffff" stroke="#e3e6ee"/>
-  <text x="62" y="340" font-family="${font}" font-size="13.5" font-weight="700" fill="#171b26">Opening it for the first time</text>
-  <text font-family="${font}" font-size="12.5" fill="#4a5163">
-    <tspan x="62" y="364">1.  Open the app from Applications. macOS will say it can't check it. Click Done.</tspan>
-    <tspan x="62" y="386">2.  Open System Settings → Privacy &amp; Security, scroll down, click Open Anyway.</tspan>
-    <tspan x="62" y="408">3.  Confirm with your password or Touch ID. You only need to do this once.</tspan>
-  </text>
 </svg>`;
+
+// [text, weight, size px, colour, x (or "centre"), top y] in 1x coordinates.
+const TEXT = [
+  ["Install Compress Studio",                                                          "semibold", 21,   "#16161a", "centre", 36],
+  ["Drag the app onto the Applications folder",                                         "regular",  13.5, "#4a5163", "centre", 70],
+  ["Opening it for the first time",                                                     "semibold", 13.5, "#16161a", 62, 328],
+  ["1.  Open the app from Applications. macOS will say it can't check it. Click Done.", "regular",  12.5, "#4a5163", 62, 354],
+  ["2.  Open System Settings → Privacy & Security, scroll down, click Open Anyway.",   "regular",  12.5, "#4a5163", 62, 376],
+  ["3.  Confirm with your password or Touch ID. You only need to do this once.",       "regular",  12.5, "#4a5163", 62, 398],
+];
+
+const escapeMarkup = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+async function dmgBackground(scale, out) {
+  const layers = [];
+  for (const [text, weight, size, colour, x, top] of TEXT) {
+    const { file, name } = GEIST[weight];
+    const img = sharp({
+      text: {
+        text: `<span foreground="${colour}">${escapeMarkup(text)}</span>`,
+        font: `${name} ${size}`,
+        fontfile: path.join(fontDir, file),
+        dpi: 72 * scale,
+        rgba: true,
+      },
+    }).png();
+    const buf = await img.toBuffer();
+    const { width } = await sharp(buf).metadata();
+    const left = x === "centre" ? Math.round((660 * scale - width) / 2) : Math.round(x * scale);
+    layers.push({ input: buf, left, top: Math.round(top * scale) });
+  }
+  await sharp(Buffer.from(bgSvg(scale))).composite(layers).png().toFile(out);
+}
 
 const bg1 = path.join(tmp, "bg.png");
 const bg2 = path.join(tmp, "bg@2x.png");
-await sharp(Buffer.from(bgSvg(1))).png().toFile(bg1);
-await sharp(Buffer.from(bgSvg(2))).png().toFile(bg2);
+await dmgBackground(1, bg1);
+await dmgBackground(2, bg2);
 execFileSync("tiffutil", ["-cathidpicheck", bg1, bg2, "-out", path.join(build, "dmg-background.tiff")]);
+if (process.env.DMG_PREVIEW) fs.copyFileSync(bg2, process.env.DMG_PREVIEW);
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("Wrote build/icon.icns, build/icon.png, build/dmg-background.tiff, app/renderer/logo.png");
