@@ -105,13 +105,13 @@ const bgSvg = (scale) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="${660 * scale}" height="${460 * scale}" viewBox="0 0 660 460">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f3f6ff"/><stop offset=".6" stop-color="#f8f4ff"/><stop offset="1" stop-color="#fff6ef"/>
+      <stop offset="0" stop-color="#fbf9ea"/><stop offset=".4" stop-color="#eaeffe"/><stop offset=".75" stop-color="#f8eaf7"/><stop offset="1" stop-color="#fdeee7"/>
     </linearGradient>
   </defs>
   <rect width="660" height="460" fill="url(#bg)"/>
   <text x="330" y="58" text-anchor="middle" font-family="${font}" font-size="21" font-weight="700" fill="#171b26">Install Compress Studio</text>
   <text x="330" y="84" text-anchor="middle" font-family="${font}" font-size="13.5" fill="#4a5163">Drag the app onto the Applications folder</text>
-  <g fill="none" stroke="#2f6bf2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".85">
+  <g fill="none" stroke="#16161a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".7">
     <path d="M262 200h128"/><path d="m376 186 16 14-16 14"/>
   </g>
   <rect x="40" y="312" width="580" height="122" rx="14" fill="#ffffff" stroke="#e3e6ee"/>
