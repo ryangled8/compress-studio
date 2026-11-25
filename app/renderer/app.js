@@ -575,6 +575,7 @@ async function init() {
 
   const choose = async (replace) => addSources(await window.api.choose(state.type), { replace });
   $("#choose-btn").onclick = (e) => { e.stopPropagation(); choose(false); };
+  $("#add-btn").onclick    = () => choose(false);
   $("#change-btn").onclick = () => choose(true);
   $("#dropzone").onclick = (e) => { if (!state.sources[state.type].length && e.target === e.currentTarget) choose(false); };
   $("#dropzone").onkeydown = (e) => { if ((e.key === "Enter" || e.key === " ") && !state.sources[state.type].length) choose(false); };

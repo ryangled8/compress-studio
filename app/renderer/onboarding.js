@@ -6,7 +6,7 @@ const Onboarding = (() => {
     { target: "nav",     title: "Choose what you're making",
       text: "Images to shrink or convert, Videos to make smaller MP4s, or GIFs from a video clip." },
     { target: "source",  title: "Add your files",
-      text: "Drag files or a whole folder anywhere onto the window, or click to choose them. Tick “Include files in subfolders” to grab everything inside." },
+      text: "Drag files or a whole folder anywhere onto the window, or click Browse… to pick them in Finder. Tick “Include files in subfolders” to grab everything inside." },
     { target: "presets", title: "Pick a preset",
       text: "Presets are ready-made settings. If you're not sure, the one marked Recommended is a safe bet." },
     { target: "adjust",  title: "Fine-tune (optional)",

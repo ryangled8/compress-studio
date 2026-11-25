@@ -66,10 +66,11 @@
           <div class="dropzone" id="dropzone" tabindex="0">
             <div class="dz-empty" id="dz-empty">
               <span class="dz-icon" data-icon="upload"></span>
-              <div>
+              <div class="dz-copy">
                 <b id="dz-title">Drop images or a folder here</b>
-                <span>or <button class="inline-link" id="choose-btn">choose from your Mac</button></span>
+                <span>or browse to pick them in Finder</span>
               </div>
+              <button class="button primary" id="choose-btn"><span data-icon="folder"></span> Browse…</button>
             </div>
             <div class="dz-filled" id="dz-filled" hidden>
               <span class="dz-folder" data-icon="folder"></span>
@@ -77,7 +78,8 @@
                 <b id="source-name"></b>
                 <span id="source-meta"></span>
               </div>
-              <button class="button" id="change-btn">Change</button>
+              <button class="button" id="add-btn" title="Add more files or folders"><span data-icon="plus"></span> Add more</button>
+              <button class="button" id="change-btn" title="Start again with different files">Change</button>
               <button class="icon-button" id="clear-btn" aria-label="Clear files"><span data-icon="x"></span></button>
             </div>
           </div>
@@ -181,7 +183,7 @@
         <summary>How it works</summary>
         <ol>
           <li><b>Choose a type</b> on the left: Images, Videos or GIFs.</li>
-          <li><b>Add files.</b> Drag them in, or click “choose from your Mac”. A whole folder works too.</li>
+          <li><b>Add files.</b> Drag them in, or click <b>Browse…</b> to pick them in Finder. A whole folder works too.</li>
           <li><b>Pick a preset</b> and press <b>Start</b>.</li>
         </ol>
       </details>

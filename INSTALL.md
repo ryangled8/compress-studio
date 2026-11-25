@@ -46,7 +46,7 @@ Click **Allow**. The app needs this to read your files and save the smaller copi
 When the app first opens, it shows a short welcome and offers a tour. In short:
 
 1. Choose **Images**, **Videos** or **GIFs** on the left.
-2. Drag in files or a folder.
+2. Drag in files or a folder, or click **Browse…** to pick them in Finder.
 3. Pick a preset (choose **Recommended** if you're not sure) and press **Start**.
 
 Your new files go into a folder called **Outputs …** next to your originals, for example `Outputs img-webp`. Click **Show in Finder** when it's done.

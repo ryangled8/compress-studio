@@ -146,9 +146,10 @@ body.is-running .nav-item:not(.active) { opacity: .45; cursor: default; }
 .dropzone:hover { border-color: var(--accent); background: #fbfcff; }
 .dropzone.filled { border-style: solid; border-color: var(--line); cursor: default; background: var(--panel); }
 .dz-empty { display: flex; align-items: center; gap: 16px; padding: 26px 24px; pointer-events: none; }
-.dz-empty button { pointer-events: auto; }
+.dz-empty button { pointer-events: auto; margin-left: auto; }
+.dz-copy { min-width: 0; }
 .dz-empty b { display: block; font-size: 15px; margin-bottom: 2px; }
-.dz-empty span { color: var(--text-2); }
+.dz-copy span { color: var(--text-2); }
 .dz-icon { width: 46px; height: 46px; padding: 11px; border-radius: 12px; background: var(--accent-bg); color: var(--accent); }
 .dz-filled { display: flex; align-items: center; gap: 14px; padding: 14px 14px 14px 18px; }
 .dz-folder { width: 38px; height: 38px; padding: 8px; border-radius: 10px; background: #fff4d9; color: #c08400; }

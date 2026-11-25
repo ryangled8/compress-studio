@@ -7,6 +7,7 @@ const ICONS = {
   folder:  '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/>',
   help:    '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>',
   x:       '<path d="M6 6l12 12M18 6 6 18"/>',
+  plus:    '<path d="M12 5v14M5 12h14"/>',
   check:   '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   play:    '<path d="M8 5.5v13l10.5-6.5z"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
