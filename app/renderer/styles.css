@@ -180,7 +180,8 @@ body.is-running .nav-item:not(.active) { opacity: .45; cursor: default; }
 .preset-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-right: 22px; }
 .preset-top b { font-size: 14.5px; font-weight: 650; }
 .preset-desc { color: var(--text-2); font-size: 13px; line-height: 1.35; }
-.preset-specs { color: var(--muted); font-size: 11.5px; margin-top: auto; padding-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-specs { color: var(--muted); font-size: 11.5px; line-height: 1.4; margin-top: auto; padding-top: 2px; }
+.preset-specs span { white-space: nowrap; } /* break between details, never inside one */
 .preset-check {
   position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; padding: 3px; border-radius: 50%;
   background: var(--accent); color: #fff; opacity: 0; transform: scale(.6); transition: opacity .15s, transform .15s;
@@ -491,3 +492,55 @@ body.is-running #start-btn { display: none; }
 .loc-text b { font-weight: 600; font-size: 13.5px; }
 .loc-text small { font-size: 12px; }
 .locations .inline-link { font-size: 12.5px; white-space: nowrap; }
+
+/* ── Files panel: preview hint and current preview ─────────── */
+
+.files-tip { display: flex; align-items: center; gap: 6px; margin: -4px 18px 8px; font-size: 12px; }
+.files-tip [data-icon] { width: 14px; height: 14px; }
+.file { cursor: default; }
+.file.previewing { background: var(--accent-bg); box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* ── Lightbox ──────────────────────────────────────────────── */
+
+.lightbox {
+  position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
+  background: rgba(10, 10, 13, .92); backdrop-filter: blur(10px); color: #fff;
+  animation: fade .15s ease-out;
+}
+.lb-bar { display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px 92px; -webkit-app-region: drag; }
+.lb-bar button { -webkit-app-region: no-drag; }
+.lb-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lb-title b { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-title span { font-size: 12.5px; color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
+.lb-count { font-size: 12.5px; color: rgba(255, 255, 255, .6); padding: 0 6px; font-variant-numeric: tabular-nums; }
+.lb-button {
+  width: 34px; height: 34px; border-radius: 9px; border: 0; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .08); color: #fff;
+}
+.lb-button:hover { background: rgba(255, 255, 255, .16); }
+.lb-button [data-icon] { width: 17px; height: 17px; }
+
+.lb-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: 64px 1fr 64px; align-items: center; padding: 0 12px; }
+.lb-media { position: relative; height: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.lb-media img, .lb-media video {
+  max-width: 100%; max-height: calc(100vh - 150px); object-fit: contain; border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5); background: rgba(255, 255, 255, .04);
+}
+.lb-media.loading::after {
+  content: ""; position: absolute; width: 28px; height: 28px; border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, .2); border-top-color: #fff; animation: spin .8s linear infinite;
+}
+.lb-message { font-size: 13px; color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .08); padding: 8px 14px; border-radius: 99px; }
+
+.lb-nav {
+  width: 46px; height: 46px; border-radius: 50%; border: 0; justify-self: center; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .1); color: #fff; transition: background .15s, opacity .15s;
+}
+.lb-nav:hover:not(:disabled) { background: rgba(255, 255, 255, .2); }
+.lb-nav:disabled { opacity: .2; cursor: default; }
+.lb-nav [data-icon] { width: 22px; height: 22px; }
+.lb-nav.prev [data-icon] { transform: rotate(90deg); }
+.lb-nav.next [data-icon] { transform: rotate(-90deg); }
+
+.lb-foot { display: flex; justify-content: center; gap: 22px; padding: 10px 0 16px; font-size: 12px; color: rgba(255, 255, 255, .45); }
+body.previewing .help-fab { display: none; }

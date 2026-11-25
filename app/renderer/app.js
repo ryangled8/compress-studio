@@ -205,6 +205,8 @@ function renderFiles() {
   const list = $("#file-list");
   list.innerHTML = "";
   $("#files-empty").hidden = state.files.length > 0;
+  $("#files-tip").hidden   = state.files.length === 0;
+  Lightbox.close(); // the list changed underneath any open preview
   $("#files-count").textContent = state.files.length ? plural(state.files.length, TYPE_COPY[state.type].noun) : "";
 
   const frag = document.createDocumentFragment();
@@ -212,6 +214,7 @@ function renderFiles() {
     const li = document.createElement("li");
     li.className = "file";
     li.dataset.index = i;
+    li.title = "Double-click to preview";
     li.innerHTML = `
       <span class="thumb" data-path="${escapeHtml(f.abs)}"></span>
       <span class="file-main">
@@ -288,7 +291,7 @@ function renderPresets() {
     card.innerHTML = `
       <span class="preset-top"><b>${escapeHtml(title)}</b>${badges}</span>
       <span class="preset-desc">${escapeHtml(desc)}</span>
-      <span class="preset-specs">${presetSpecs(type, p).map(escapeHtml).join(" · ")}</span>
+      <span class="preset-specs">${presetSpecs(type, p).map((x) => `<span>${escapeHtml(x)}</span>`).join(" · ")}</span>
       <span class="preset-check" data-icon="check"></span>`;
     card.onclick = () => selectPreset(key);
     grid.append(card);
@@ -676,6 +679,23 @@ async function init() {
   });
 
   window.api.onJobEvent(onJobEvent);
+
+  // Double-click a file to preview it full size.
+  Lightbox.init({
+    getFiles: () => state.files,
+    getRows:  () => state.rows,
+    getType:  () => state.type,
+    onIndexChange: (i) => {
+      $$("#file-list .file.previewing").forEach((li) => li.classList.remove("previewing"));
+      const li = $(`#file-list .file[data-index="${i}"]`);
+      li?.classList.add("previewing");
+      li?.scrollIntoView({ block: "nearest" });
+    },
+  });
+  $("#file-list").addEventListener("dblclick", (e) => {
+    const li = e.target.closest(".file");
+    if (li) Lightbox.open(Number(li.dataset.index));
+  });
   setupDragAndDrop();
   selectType(state.type);
   updateHistoryCount();

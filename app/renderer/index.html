@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'" />
+        content="default-src 'self'; img-src 'self' data: preview:; media-src preview:; style-src 'self'; script-src 'self'" />
   <title>Compress Studio</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -171,6 +171,7 @@
         <h3>Files</h3>
         <span class="muted" id="files-count"></span>
       </div>
+      <p class="files-tip muted" id="files-tip" hidden><span data-icon="eye"></span> Double-click a file to preview it</p>
       <div class="files-empty" id="files-empty">
         <span data-icon="stack"></span>
         <p>Your files will show up here.</p>
@@ -233,6 +234,11 @@
       </details>
 
       <details>
+        <summary>Can I check a file before compressing?</summary>
+        <p>Yes. <b>Double-click</b> any file in the Files list to preview it full size; videos play. Use the <b>← →</b> arrow keys (or the arrows on screen) to move through the list, and <b>Esc</b>, the ✕ or a click outside to close.</p>
+      </details>
+
+      <details>
         <summary>Where can I see past runs?</summary>
         <p>Click <b>History</b> in the sidebar. Every run is saved there with its before and after sizes, any kept originals or failures, and a button to open its Outputs folder. History is kept on this Mac only.</p>
       </details>
@@ -261,6 +267,25 @@
       </details>
     </div>
     <div class="help-foot muted" id="help-version"></div>
+  </div>
+
+  <!-- File preview (double-click a file in the list) -->
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="File preview">
+    <header class="lb-bar">
+      <div class="lb-title">
+        <b id="lb-name"></b>
+        <span id="lb-meta"></span>
+      </div>
+      <span class="lb-count" id="lb-count"></span>
+      <button class="lb-button" id="lb-reveal" title="Show in Finder"><span data-icon="folder"></span></button>
+      <button class="lb-button" id="lb-close" title="Close (Esc)" aria-label="Close preview"><span data-icon="x"></span></button>
+    </header>
+    <div class="lb-stage" id="lb-stage">
+      <button class="lb-nav prev" id="lb-prev" title="Previous (←)" aria-label="Previous file"><span data-icon="chevron"></span></button>
+      <div class="lb-media" id="lb-media"></div>
+      <button class="lb-nav next" id="lb-next" title="Next (→)" aria-label="Next file"><span data-icon="chevron"></span></button>
+    </div>
+    <footer class="lb-foot"><span>← → to browse</span><span>Esc to close</span></footer>
   </div>
 
   <!-- Toasts -->
@@ -328,6 +353,7 @@
   <script src="icons.js"></script>
   <script src="presetInfo.js"></script>
   <script src="history.js"></script>
+  <script src="lightbox.js"></script>
   <script src="onboarding.js"></script>
   <script src="app.js"></script>
 </body>

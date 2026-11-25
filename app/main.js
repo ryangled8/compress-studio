@@ -1,10 +1,10 @@
 // Compress Studio — Electron main process.
 // Owns the window, file access and the job queue; the UI lives in app/renderer/.
 
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, nativeTheme, powerSaveBlocker, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, nativeTheme, powerSaveBlocker, Notification, protocol, net } from "electron";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import ffmpegStatic from "ffmpeg-static";
 import { MEDIA, collectFiles, planJobs, runJob } from "../lib/jobs.js";
 import { setFFmpegPath, checkFFmpeg } from "../lib/runFFmpeg.js";
@@ -15,6 +15,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 setFFmpegPath(ffmpegStatic.replace("app.asar", "app.asar.unpacked"));
 
 nativeTheme.themeSource = "light";
+
+// preview://file/<encoded path> lets the UI show full-size images and play videos.
+// It only serves files the user has added (see files:collect), nothing else on disk.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "preview", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+]);
+const previewable = new Set();
 
 let win = null;
 
@@ -48,7 +55,15 @@ function createWindow() {
   win.webContents.on("will-navigate", (e) => e.preventDefault());
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  protocol.handle("preview", (request) => {
+    const filePath = decodeURIComponent(new URL(request.url).pathname.slice(1));
+    if (!previewable.has(filePath)) return new Response("Not found", { status: 404 });
+    // Pass Range headers through so videos can seek.
+    return net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers, bypassCustomProtocolHandlers: true });
+  });
+  createWindow();
+});
 app.on("window-all-closed", () => app.quit());
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -96,15 +111,19 @@ ipcMain.handle("dialog:choose", async (_e, type) => {
 ipcMain.handle("files:collect", (_e, type, paths, includeSubfolders) => {
   try {
     const { files, skipped } = collectFiles(type, paths, includeSubfolders);
+    files.forEach((f) => previewable.add(f.abs));
     return { files, skipped };
   } catch (err) {
     return { error: friendlyError(err, err?.path ?? paths[0]) };
   }
 });
 
-ipcMain.handle("files:thumbnail", async (_e, filePath) => {
+// Quick Look thumbnails: small ones for the file list, large ones as a fallback
+// preview for formats the window can't show itself (e.g. TIFF, some videos).
+ipcMain.handle("files:thumbnail", async (_e, filePath, size = 96) => {
   try {
-    const img = await nativeImage.createThumbnailFromPath(filePath, { width: 96, height: 96 });
+    const px = Math.min(2400, Math.max(32, Number(size) || 96));
+    const img = await nativeImage.createThumbnailFromPath(filePath, { width: px, height: px });
     return img.isEmpty() ? null : img.toDataURL();
   } catch {
     return null;
