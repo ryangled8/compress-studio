@@ -6,13 +6,17 @@ import { Command } from "commander";
 import gifPresets from "../presets/gifPresets.js";
 import videoPresets from "../presets/videoPresets.js";
 import imgPresets from "../presets/imgPresets.js";
-import { resolveWidth } from "../lib/resolveWidth.js";
+import { resolveGifSettings, resolveVideoSettings, resolveImgSettings, muteSuffixFor } from "../lib/settings.js";
 import { buildFilters } from "../lib/buildFilters.js";
 import { buildVideoArgs } from "../lib/buildVideoCommand.js";
 import { compressImage } from "../lib/runSharp.js";
-import { runFFmpegAsync, runFFmpegRawAsync, checkFFmpeg, checkCodec, printFFmpegInstallHelp } from "../lib/runFFmpeg.js";
+import { runFFmpegAsync, runFFmpegRawAsync, checkFFmpeg, checkCodec, printFFmpegInstallHelp, setFFmpegPath } from "../lib/runFFmpeg.js";
 import { findVideoFiles, findImageFiles } from "../lib/selectFiles.js";
-import { runBgRemoval } from "../lib/runBgRemoval.js";
+import ffmpegStatic from "ffmpeg-static";
+
+// Use the system FFmpeg when there is one; otherwise fall back to the copy
+// bundled with the ffmpeg-static dependency, so no separate install is needed.
+if (!checkFFmpeg() && ffmpegStatic) setFFmpegPath(ffmpegStatic);
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
@@ -184,6 +188,7 @@ function showHelp() {
   console.log(`  ${label(flag("--codec") + " " + arg("<name>"))} Override video codec`);
   console.log(`  ${label(flag("--preset") + " " + arg("<name>"))} Override FFmpeg encoder preset`);
   console.log(`  ${label(flag("--audio") + " " + arg("<bitrate>"))} Override audio bitrate (e.g. 192k)`);
+  console.log(`  ${label(flag("-m, --mute"))} Remove the audio track`);
   console.log(`  ${label(flag("-a, --all"))} Recurse into subdirectories ${dim("(batch only)")}`);
   console.log(`  ${label(flag("-o, --output") + " " + arg("<file>"))} Custom output filename ${dim("(single only)")}`);
   console.log();
@@ -258,9 +263,8 @@ function showHelp() {
         ? `${Math.round(preset.widthFactor * 100)}% of source`
         : `${preset.width}px`;
     const fmt = preset.format ?? "inherit";
-    const qualityLabel = preset.quality != null ? `quality ${preset.quality}` : "AI model";
     console.log(`  ${green(bold(padded))}  ${dim("→")}  ${preset.label}`);
-    console.log(dim(`  ${"".padEnd(imgNameWidth)}     ${imgDims} · ${fmt} · ${qualityLabel}`));
+    console.log(dim(`  ${"".padEnd(imgNameWidth)}     ${imgDims} · ${fmt} · quality ${preset.quality}`));
     console.log();
   }
 
@@ -283,10 +287,8 @@ function showHelp() {
   console.log(`  ${dim("$")} ${cmd("gc img")} ${arg("photo.jpg webp")}`);
   console.log(`  ${dim("$")} ${cmd("gc img")} ${arg("photo.jpg social")} ${flag("-w 720")}`);
   console.log(`  ${dim("$")} ${cmd("gc img")} ${arg("photo.png compress")} ${flag("--format webp")}`);
-  console.log(`  ${dim("$")} ${cmd("gc img")} ${arg("photo.jpg bg-remove")}`);
   console.log(`  ${dim("$")} ${cmd("gc img batch")} ${arg("webp")}`);
   console.log(`  ${dim("$")} ${cmd("gc img batch")} ${arg("webp")} ${flag("--all")}     ${dim("# include all subfolders")}`);
-  console.log(`  ${dim("$")} ${cmd("gc img batch")} ${arg("bg-remove")}`);
   console.log();
 }
 
@@ -331,53 +333,10 @@ function listPresets() {
         ? `${Math.round(preset.widthFactor * 100)}% of source`
         : `${preset.width}px wide`;
     const fmt = preset.format ?? "inherit input format";
-    const qualityLabel = preset.quality != null ? `quality ${preset.quality}` : "AI model";
     console.log(`  ${green(bold(padded))}  ${dim("→")}  ${preset.label}`);
-    console.log(dim(`  ${"".padEnd(imgNameWidth)}     ${dims} · ${fmt} · ${qualityLabel}`));
+    console.log(dim(`  ${"".padEnd(imgNameWidth)}     ${dims} · ${fmt} · quality ${preset.quality}`));
     console.log();
   }
-}
-
-// ─── GIF: resolve settings ────────────────────────────────────────────────────
-
-function resolveGifSettings(presetName, options) {
-  const preset = { ...gifPresets[presetName] };
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  return {
-    fps:    options.fps    ? parseInt(options.fps, 10)    : preset.fps,
-    colors: options.colors ? parseInt(options.colors, 10) : preset.colors,
-    dither: options.dither ?? preset.dither,
-    width:  hasWidthOverride ? resolveWidth(options.width, preset.width ?? 1920) : preset.width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-  };
-}
-
-// ─── Video: resolve settings ──────────────────────────────────────────────────
-
-function resolveVideoSettings(presetName, options) {
-  const preset = { ...videoPresets[presetName] };
-
-  // Explicit width override disables keepOriginalDimensions
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  const width = hasWidthOverride
-    ? resolveWidth(options.width, preset.width ?? 1920)
-    : preset.width;
-
-  return {
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-    width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    codec:         options.codec  ?? preset.codec,
-    crf:           options.crf    ? parseInt(options.crf, 10) : preset.crf,
-    preset:        options.preset ?? preset.preset,
-    fps:           options.fps    ? parseInt(options.fps, 10) : null,
-    audioBitrate:  options.audio  ?? preset.audioBitrate,
-  };
 }
 
 // ─── GIF: compress single file ────────────────────────────────────────────────
@@ -539,7 +498,7 @@ async function compressVideo(input, presetName, options) {
   const widthSuffix = (options.width && width !== -1) ? `-${width}px` : "";
   const output      = options.output
     ? options.output
-    : path.join(outDir, `${basename}-${presetName}${widthSuffix}.mp4`);
+    : path.join(outDir, `${basename}-${presetName}${widthSuffix}${muteSuffixFor(settings)}.mp4`);
 
   const codecLabel = { libx264: "H.264", libx265: "H.265 (HEVC)" }[codec] ?? codec;
 
@@ -558,7 +517,7 @@ async function compressVideo(input, presetName, options) {
   if (fps) console.log(`  ${dim("FPS")}       ${fps}`);
   console.log(`  ${dim("CRF")}       ${crf}`);
   console.log(`  ${dim("Codec")}     ${codecLabel}`);
-  console.log(`  ${dim("Audio")}     ${audioBitrate}`);
+  console.log(`  ${dim("Audio")}     ${settings.mute ? "removed" : audioBitrate}`);
   console.log();
   warnIfSlow(videoPresets[presetName]);
   warnIfLargeFile(input, videoPresets[presetName]);
@@ -619,6 +578,7 @@ async function batchVideo(presetName, options) {
   if (options.all) console.log(`  ${dim("Scope")}     subdirectories included`);
   console.log(`  ${dim("Width")}     ${batchVidWidthLabel}`);
   console.log(`  ${dim("CRF")}       ${settings.crf}`);
+  if (settings.mute) console.log(`  ${dim("Audio")}     removed`);
   console.log();
   warnIfSlow(videoPresets[presetName]);
   warnIfLargeFile(files.map((f) => path.join(cwd, f)), videoPresets[presetName]);
@@ -635,7 +595,7 @@ async function batchVideo(presetName, options) {
     const relDir    = path.dirname(file);
     const outputDir = relDir === "." ? outFolder : path.join(outFolder, relDir);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    const output    = path.join(outputDir, `${basename}-${presetName}${widthSuffix}.mp4`);
+    const output    = path.join(outputDir, `${basename}-${presetName}${widthSuffix}${muteSuffixFor(settings)}.mp4`);
     const label     = `  ${dim(`[${i + 1}/${total}]`)} ${file}${dim("...")}  `;
     const spinner   = startSpinner(label);
 
@@ -660,30 +620,6 @@ async function batchVideo(presetName, options) {
   }
 }
 
-// ─── Image: resolve settings ──────────────────────────────────────────────────
-
-function resolveImgSettings(presetName, options) {
-  const preset = { ...imgPresets[presetName] };
-  const hasWidthOverride = Boolean(options.width);
-  const keepOriginalDimensions = hasWidthOverride ? false : (preset.keepOriginalDimensions ?? false);
-  const width = hasWidthOverride
-    ? resolveWidth(options.width, preset.width ?? 1920)
-    : preset.width;
-
-  let format = options.format ?? preset.format;
-  if (format === "jpg") format = "jpeg";
-
-  return {
-    keepOriginalDimensions,
-    widthOverride: hasWidthOverride,
-    width,
-    widthFactor: hasWidthOverride ? null : (preset.widthFactor ?? null),
-    format,
-    quality: options.quality ? parseInt(options.quality, 10) : preset.quality,
-    bgRemove: preset.bgRemove ?? false,
-  };
-}
-
 // ─── Image: compress single file ─────────────────────────────────────────────
 
 async function compressImg(input, presetName, options) {
@@ -701,34 +637,6 @@ async function compressImg(input, presetName, options) {
   const basename = path.basename(input, ext);
   const outDir   = path.dirname(input);
   const widthSuffix = (options.width && width !== -1) ? `-${width}px` : "";
-
-  if (settings.bgRemove) {
-    const output = options.output ?? path.join(outDir, `${basename}-bg-remove${widthSuffix}.png`);
-
-    console.log();
-    console.log(`  ${dim("Removing background")} ${bold(input)}${dim("...")}`);
-    console.log();
-    console.log(`  ${dim("Mode")}      ${green("img")}`);
-    console.log(`  ${dim("Preset")}    ${green(presetName)}`);
-    console.log(`  ${dim("Output")}    PNG with transparency`);
-    if (width) console.log(`  ${dim("Width")}     ${width}px`);
-    console.log();
-
-    const spinner = startSpinner(`  ${dim("Removing background (downloading AI models on first run)...")}  `);
-
-    try {
-      await runBgRemoval(input, output, width ?? null);
-      spinner.clear();
-    } catch (err) {
-      spinner.clear();
-      console.error(red(`\n  Background removal failed.\n`));
-      console.error(dim(err.message));
-      process.exit(1);
-    }
-
-    console.log(`  ${green("Done")} ${dim("→")} ${bold(output)}\n`);
-    return;
-  }
 
   const inputExt  = path.extname(input).slice(1).toLowerCase();
   const outputExt = format === "jpeg" ? "jpg" : (format ?? inputExt);
@@ -789,50 +697,6 @@ async function batchImg(presetName, options) {
 
   const total = files.length;
   const widthSuffix = (options.width && width !== -1) ? `-${width}px` : "";
-
-  if (settings.bgRemove) {
-    console.log();
-    console.log(`  ${bold("Batch")} ${green("img")} ${bold(`· ${total} file${total === 1 ? "" : "s"}`)} ${dim("→")} ${green(`Outputs img-${presetName}/`)}`);
-    console.log();
-    console.log(`  ${dim("Preset")}    ${green(presetName)}`);
-    if (options.all) console.log(`  ${dim("Scope")}     subdirectories included`);
-    if (width) console.log(`  ${dim("Width")}     ${width}px`);
-    console.log(`  ${dim("Output")}    PNG with transparency`);
-    console.log(`  ${dim("Note")}      AI models download on first run (~45MB)`);
-    console.log();
-
-    let passed = 0;
-    let failed = 0;
-
-    for (let i = 0; i < files.length; i++) {
-      const file      = files[i];
-      const basename  = path.basename(file, path.extname(file));
-      const relDir    = path.dirname(file);
-      const outputDir = relDir === "." ? outFolder : path.join(outFolder, relDir);
-      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-      const output    = path.join(outputDir, `${basename}${widthSuffix}.png`);
-      const label     = `  ${dim(`[${i + 1}/${total}]`)} ${file}${dim("...")}  `;
-      const spinner   = startSpinner(label);
-
-      try {
-        await runBgRemoval(path.join(cwd, file), output, width ?? null);
-        spinner.done(green("Done"));
-        passed++;
-      } catch (err) {
-        spinner.done(red("Failed"));
-        console.error(dim(`     ${err.message}`));
-        failed++;
-      }
-    }
-
-    console.log();
-    if (failed === 0) {
-      console.log(`  ${green(bold(`${passed} image${passed === 1 ? "" : "s"} saved`))} ${dim("→")} ${bold(`Outputs img-${presetName}/`)}\n`);
-    } else {
-      console.log(`  ${green(`${passed} saved`)}  ${red(`${failed} failed`)}  ${dim("→")} ${bold(`Outputs img-${presetName}/`)}\n`);
-    }
-    return;
-  }
 
   const batchImgWidthLabel = keepOriginalDimensions
     ? dim("original dimensions")
@@ -952,6 +816,7 @@ const videoCmd = program
   .option("--codec <name>",        "Override video codec (e.g. libx265)")
   .option("--preset <name>",       "Override FFmpeg encoder preset (e.g. slow, fast)")
   .option("--audio <bitrate>",     "Override audio bitrate (e.g. 192k)")
+  .option("-m, --mute",            "Remove the audio track")
   .option("-o, --output <file>",   "Custom output filename")
   .action(async (input, preset, options) => {
     try {
@@ -972,6 +837,7 @@ videoCmd
   .option("--codec <name>",        "Override video codec")
   .option("--preset <name>",       "Override FFmpeg encoder preset")
   .option("--audio <bitrate>",     "Override audio bitrate")
+  .option("-m, --mute",            "Remove the audio track")
   .option("-a, --all",             "Recurse into subdirectories")
   .action(async (preset, options) => {
     try {

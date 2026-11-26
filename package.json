@@ -1,12 +1,17 @@
 {
   "name": "gifcompress",
   "version": "1.0.0",
-  "description": "Creator-friendly GIF compression CLI — built on top of FFmpeg",
+  "description": "Compress images, videos and GIFs: a Mac app and the gc CLI, built on FFmpeg and sharp",
+  "productName": "Compress Studio",
   "type": "module",
+  "main": "app/main.js",
   "bin": {
     "gc": "./bin/gc.js"
   },
   "scripts": {
+    "app": "electron .",
+    "dist": "electron-builder --mac",
+    "icons": "node scripts/make-assets.js",
     "test": "node bin/gc.js --help"
   },
   "keywords": [
@@ -17,16 +22,77 @@
     "video",
     "convert"
   ],
-  "author": "",
+  "author": "Ryan",
   "license": "MIT",
   "dependencies": {
-    "@imgly/background-removal-node": "^1.4.5",
     "commander": "^12.0.0",
+    "ffmpeg-static": "^5.3.0",
     "prompts": "^2.4.2",
     "sharp": "^0.34.5"
   },
   "engines": {
     "node": ">=16.0.0"
   },
-  "overrides": {}
+  "overrides": {},
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "local.compress-studio",
+    "productName": "Compress Studio",
+    "copyright": "Internal use only",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**",
+      "lib/**",
+      "presets/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.photography",
+      "icon": "build/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Compress Studio",
+      "background": "build/dmg-background.tiff",
+      "window": {
+        "width": 660,
+        "height": 460
+      },
+      "iconSize": 112,
+      "contents": [
+        {
+          "x": 180,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 480,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
 }
