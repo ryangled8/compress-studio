@@ -223,6 +223,13 @@ body.is-running .preset { pointer-events: none; opacity: .7; }
 .range { display: flex; align-items: center; gap: 10px; height: 36px; }
 .range input { flex: 1; accent-color: var(--accent); }
 .range output { width: 30px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.toggle {
+  display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px; cursor: pointer;
+  border: 1px solid var(--line-2); border-radius: 9px; background: var(--panel); color: var(--text-2);
+}
+.toggle:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.toggle:has(input:checked) { border-color: var(--accent); color: var(--text); }
+.toggle input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; outline: none; }
 .adjust-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 13px; }
 
 /* Tooltips on the little ? icons */

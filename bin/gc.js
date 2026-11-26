@@ -6,7 +6,7 @@ import { Command } from "commander";
 import gifPresets from "../presets/gifPresets.js";
 import videoPresets from "../presets/videoPresets.js";
 import imgPresets from "../presets/imgPresets.js";
-import { resolveGifSettings, resolveVideoSettings, resolveImgSettings } from "../lib/settings.js";
+import { resolveGifSettings, resolveVideoSettings, resolveImgSettings, muteSuffixFor } from "../lib/settings.js";
 import { buildFilters } from "../lib/buildFilters.js";
 import { buildVideoArgs } from "../lib/buildVideoCommand.js";
 import { compressImage } from "../lib/runSharp.js";
@@ -188,6 +188,7 @@ function showHelp() {
   console.log(`  ${label(flag("--codec") + " " + arg("<name>"))} Override video codec`);
   console.log(`  ${label(flag("--preset") + " " + arg("<name>"))} Override FFmpeg encoder preset`);
   console.log(`  ${label(flag("--audio") + " " + arg("<bitrate>"))} Override audio bitrate (e.g. 192k)`);
+  console.log(`  ${label(flag("-m, --mute"))} Remove the audio track`);
   console.log(`  ${label(flag("-a, --all"))} Recurse into subdirectories ${dim("(batch only)")}`);
   console.log(`  ${label(flag("-o, --output") + " " + arg("<file>"))} Custom output filename ${dim("(single only)")}`);
   console.log();
@@ -497,7 +498,7 @@ async function compressVideo(input, presetName, options) {
   const widthSuffix = (options.width && width !== -1) ? `-${width}px` : "";
   const output      = options.output
     ? options.output
-    : path.join(outDir, `${basename}-${presetName}${widthSuffix}.mp4`);
+    : path.join(outDir, `${basename}-${presetName}${widthSuffix}${muteSuffixFor(settings)}.mp4`);
 
   const codecLabel = { libx264: "H.264", libx265: "H.265 (HEVC)" }[codec] ?? codec;
 
@@ -516,7 +517,7 @@ async function compressVideo(input, presetName, options) {
   if (fps) console.log(`  ${dim("FPS")}       ${fps}`);
   console.log(`  ${dim("CRF")}       ${crf}`);
   console.log(`  ${dim("Codec")}     ${codecLabel}`);
-  console.log(`  ${dim("Audio")}     ${audioBitrate}`);
+  console.log(`  ${dim("Audio")}     ${settings.mute ? "removed" : audioBitrate}`);
   console.log();
   warnIfSlow(videoPresets[presetName]);
   warnIfLargeFile(input, videoPresets[presetName]);
@@ -577,6 +578,7 @@ async function batchVideo(presetName, options) {
   if (options.all) console.log(`  ${dim("Scope")}     subdirectories included`);
   console.log(`  ${dim("Width")}     ${batchVidWidthLabel}`);
   console.log(`  ${dim("CRF")}       ${settings.crf}`);
+  if (settings.mute) console.log(`  ${dim("Audio")}     removed`);
   console.log();
   warnIfSlow(videoPresets[presetName]);
   warnIfLargeFile(files.map((f) => path.join(cwd, f)), videoPresets[presetName]);
@@ -593,7 +595,7 @@ async function batchVideo(presetName, options) {
     const relDir    = path.dirname(file);
     const outputDir = relDir === "." ? outFolder : path.join(outFolder, relDir);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    const output    = path.join(outputDir, `${basename}-${presetName}${widthSuffix}.mp4`);
+    const output    = path.join(outputDir, `${basename}-${presetName}${widthSuffix}${muteSuffixFor(settings)}.mp4`);
     const label     = `  ${dim(`[${i + 1}/${total}]`)} ${file}${dim("...")}  `;
     const spinner   = startSpinner(label);
 
@@ -814,6 +816,7 @@ const videoCmd = program
   .option("--codec <name>",        "Override video codec (e.g. libx265)")
   .option("--preset <name>",       "Override FFmpeg encoder preset (e.g. slow, fast)")
   .option("--audio <bitrate>",     "Override audio bitrate (e.g. 192k)")
+  .option("-m, --mute",            "Remove the audio track")
   .option("-o, --output <file>",   "Custom output filename")
   .action(async (input, preset, options) => {
     try {
@@ -834,6 +837,7 @@ videoCmd
   .option("--codec <name>",        "Override video codec")
   .option("--preset <name>",       "Override FFmpeg encoder preset")
   .option("--audio <bitrate>",     "Override audio bitrate")
+  .option("-m, --mute",            "Remove the audio track")
   .option("-a, --all",             "Recurse into subdirectories")
   .action(async (preset, options) => {
     try {

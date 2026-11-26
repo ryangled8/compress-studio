@@ -410,7 +410,13 @@ function fieldDefs() {
         help: "WebP and AVIF are smallest. JPEG works everywhere. PNG is lossless (bigger)." },
     ];
   }
-  if (state.type === "vid") return [width];
+  if (state.type === "vid") {
+    return [
+      width,
+      { key: "mute", label: "Sound", type: "toggle", text: "Mute (remove audio)",
+        help: "Removes the audio track, so the video plays silently. Handy for screen recordings and background loops, and makes the file a little smaller." },
+    ];
+  }
   return [
     width,
     { key: "fps", label: "Frame rate", unit: "fps", type: "number", min: 1, max: 60, placeholder: String(p.fps),
@@ -424,11 +430,15 @@ function renderFields() {
   wrap.innerHTML = "";
 
   for (const def of fieldDefs()) {
-    const field = document.createElement("label");
+    // A toggle carries its own <label>, so clicking the ? tip doesn't flip it.
+    const field = document.createElement(def.type === "toggle" ? "div" : "label");
     field.className = "field";
     const v = values[def.key] ?? "";
     let control;
-    if (def.type === "select") {
+    if (def.type === "toggle") {
+      control = `<label class="toggle"><input type="checkbox" data-key="${def.key}" ${v ? "checked" : ""} />
+                 <span>${escapeHtml(def.text)}</span></label>`;
+    } else if (def.type === "select") {
       control = `<select data-key="${def.key}">${def.options.map(([val, text]) =>
         `<option value="${val}" ${val === v ? "selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select>`;
     } else if (def.type === "range") {
@@ -447,7 +457,9 @@ function renderFields() {
   wrap.querySelectorAll("[data-key]").forEach((input) => {
     input.addEventListener("input", () => {
       const key = input.dataset.key;
-      if (input.type === "range") {
+      if (input.type === "checkbox") {
+        state.adjust[state.type][key] = input.checked ? true : "";
+      } else if (input.type === "range") {
         input.nextElementSibling.textContent = input.value;
         // Only treat quality as an override once it differs from the preset.
         state.adjust[state.type][key] = Number(input.value) === currentPreset().quality ? "" : input.value;
@@ -472,6 +484,7 @@ function updateAdjustSummary() {
   if (a.quality) parts.push(`quality ${a.quality}`);
   if (a.format)  parts.push(FORMAT_NAMES[a.format === "jpg" ? "jpeg" : a.format]);
   if (a.fps)     parts.push(`${a.fps} fps`);
+  if (a.mute)    parts.push("muted");
   $("#adjust-summary").textContent = parts.length ? `Custom: ${parts.join(" · ")}` : "Using the preset's settings.";
   $("#adjust").classList.toggle("custom", parts.length > 0);
   $("#reset-adjust").hidden = parts.length === 0;
